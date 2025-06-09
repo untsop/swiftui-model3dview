@@ -48,8 +48,13 @@ public struct OrbitControls<C: Camera>: CameraControls {
 	public var minZoom: CGFloat
 	public var maxZoom: CGFloat
 	public private(set) var friction: CGFloat
+	public private(set) var pinchGestureEnabled: Bool
 
 	private let center: Vector3 = [0, 0, 0]
+	
+	// Optional bindings for external state control
+	private var rotationBinding: Binding<CGPoint>?
+	private var distanceBinding: Binding<CGFloat>?
 	
 	// Values to apply to the camera.
 	@State private var rotation = CGPoint()
@@ -73,7 +78,8 @@ public struct OrbitControls<C: Camera>: CameraControls {
 		maxYaw: Angle = .degrees(.infinity),
 		minZoom: CGFloat = 1,
 		maxZoom: CGFloat = 10,
-		friction: CGFloat = 0.1
+		friction: CGFloat = 0.1,
+		pinchGestureEnabled: Bool = true
 	) {
 		self.camera = camera
 		self.sensitivity = max(sensitivity, 0.01)
@@ -84,9 +90,56 @@ public struct OrbitControls<C: Camera>: CameraControls {
 		self.minZoom = minZoom
 		self.maxZoom = maxZoom
 		self.friction = clamp(friction, 0.01, 0.99)
+		self.pinchGestureEnabled = pinchGestureEnabled
 		
 		// TODO: Set initial `rotation` and `zoom` based on the Camera's values.
 		_distance = State(initialValue: CGFloat(length(camera.wrappedValue.position)))
+	}
+	
+	/// Initialize with external bindings for rotation and distance state.
+	///
+	/// This allows you to save and restore camera state externally.
+	/// ```swift
+	/// @State var cameraRotation = CGPoint()
+	/// @State var cameraDistance: CGFloat = 50
+	///
+	/// Model3DView(named: "bunny.gltf")
+	///     .cameraControls(OrbitControls(
+	///         camera: $camera,
+	///         rotation: $cameraRotation,
+	///         distance: $cameraDistance
+	///     ))
+	/// ```
+	public init(
+		camera: Binding<BoundCamera>,
+		rotation: Binding<CGPoint>,
+		distance: Binding<CGFloat>,
+		sensitivity: CGFloat = 0.5,
+		minPitch: Angle = .degrees(-89.9),
+		maxPitch: Angle = .degrees(89.9),
+		minYaw: Angle = .degrees(-.infinity),
+		maxYaw: Angle = .degrees(.infinity),
+		minZoom: CGFloat = 1,
+		maxZoom: CGFloat = 10,
+		friction: CGFloat = 0.1,
+		pinchGestureEnabled: Bool = true
+	) {
+		self.camera = camera
+		self.sensitivity = max(sensitivity, 0.01)
+		self.minPitch = minPitch
+		self.maxPitch = maxPitch
+		self.minYaw = minYaw
+		self.maxYaw = maxYaw
+		self.minZoom = minZoom
+		self.maxZoom = maxZoom
+		self.friction = clamp(friction, 0.01, 0.99)
+		self.pinchGestureEnabled = pinchGestureEnabled
+		self.rotationBinding = rotation
+		self.distanceBinding = distance
+		
+		// Initialize internal state with bound values
+		_rotation = State(initialValue: rotation.wrappedValue)
+		_distance = State(initialValue: distance.wrappedValue)
 	}
 
 	// MARK: -
@@ -128,9 +181,25 @@ public struct OrbitControls<C: Camera>: CameraControls {
 
 	// Updating the camera and other values at a per-tick rate.
 	private func tick(frame: DisplayLink.Frame? = nil) {
+		// Sync from external bindings if available
+		if let rotationBinding = rotationBinding {
+			rotation = rotationBinding.wrappedValue
+		}
+		if let distanceBinding = distanceBinding {
+			distance = distanceBinding.wrappedValue
+		}
+		
 		rotation.x = clamp(rotation.x + velocityPan.x, minYaw.degrees, maxYaw.degrees)
 		rotation.y = clamp(rotation.y + velocityPan.y, minPitch.degrees, maxPitch.degrees)
 		distance = clamp(distance + velocityZoom, minZoom, maxZoom)
+		
+		// Sync back to external bindings if available
+		if let rotationBinding = rotationBinding {
+			rotationBinding.wrappedValue = rotation
+		}
+		if let distanceBinding = distanceBinding {
+			distanceBinding.wrappedValue = distance
+		}
 		
 		let theta = rotation.x * (.pi / 180)
 		let phi = rotation.y * (.pi / 180)
@@ -151,7 +220,7 @@ public struct OrbitControls<C: Camera>: CameraControls {
 
 	public func body(content: Content) -> some View {
 		content
-			.gesture(dragGesture.exclusively(before: pinchGesture))
+			.gesture(pinchGestureEnabled ? dragGesture.exclusively(before: pinchGesture) : dragGesture)
 			.onAppear { tick() }
 			.camera(camera.wrappedValue)
 			.onFrame(isActive: isAnimating, tick)
