@@ -8,10 +8,10 @@ import SceneKit
 import SwiftUI
 
 #if os(macOS)
-typealias PlatformImage = NSImage
+public typealias PlatformImage = NSImage
 typealias ViewRepresentable = NSViewRepresentable
 #elseif os(iOS) || os(tvOS)
-typealias PlatformImage = UIImage
+public typealias PlatformImage = UIImage
 typealias ViewRepresentable = UIViewRepresentable
 #endif
 
