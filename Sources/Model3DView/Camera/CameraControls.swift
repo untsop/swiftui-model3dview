@@ -54,7 +54,7 @@ public struct OrbitControls<C: Camera>: CameraControls {
 	
 	// Optional bindings for external state control
 	private var rotationBinding: Binding<CGPoint>?
-	private var distanceBinding: Binding<CGFloat>?
+	private var zoomPositionBinding: Binding<CGFloat>?
 	
 	// Values to apply to the camera.
 	@State private var rotation = CGPoint()
@@ -96,24 +96,24 @@ public struct OrbitControls<C: Camera>: CameraControls {
 		_distance = State(initialValue: CGFloat(length(camera.wrappedValue.position)))
 	}
 	
-	/// Initialize with external bindings for rotation and distance state.
+	/// Initialize with external bindings for rotation and zoom position state.
 	///
 	/// This allows you to save and restore camera state externally.
 	/// ```swift
 	/// @State var cameraRotation = CGPoint()
-	/// @State var cameraDistance: CGFloat = 50
+	/// @State var cameraZoomPosition: CGFloat = 1
 	///
 	/// Model3DView(named: "bunny.gltf")
 	///     .cameraControls(OrbitControls(
 	///         camera: $camera,
 	///         rotation: $cameraRotation,
-	///         distance: $cameraDistance
+	///         zoomPosition: $cameraZoomPosition
 	///     ))
 	/// ```
 	public init(
 		camera: Binding<BoundCamera>,
 		rotation: Binding<CGPoint>,
-		distance: Binding<CGFloat>,
+		zoomPosition: Binding<CGFloat>,
 		sensitivity: CGFloat = 0.5,
 		minPitch: Angle = .degrees(-89.9),
 		maxPitch: Angle = .degrees(89.9),
@@ -135,11 +135,12 @@ public struct OrbitControls<C: Camera>: CameraControls {
 		self.friction = clamp(friction, 0.01, 0.99)
 		self.pinchGestureEnabled = pinchGestureEnabled
 		self.rotationBinding = rotation
-		self.distanceBinding = distance
+		self.zoomPositionBinding = zoomPosition
 		
 		// Initialize internal state with bound values
 		_rotation = State(initialValue: rotation.wrappedValue)
-		_distance = State(initialValue: distance.wrappedValue)
+		_zoomPosition = State(initialValue: zoomPosition.wrappedValue)
+		_distance = State(initialValue: CGFloat(length(camera.wrappedValue.position)))
 	}
 
 	// MARK: -
@@ -185,8 +186,8 @@ public struct OrbitControls<C: Camera>: CameraControls {
 		if let rotationBinding = rotationBinding {
 			rotation = rotationBinding.wrappedValue
 		}
-		if let distanceBinding = distanceBinding {
-			distance = distanceBinding.wrappedValue
+		if let zoomPositionBinding = zoomPositionBinding {
+			zoomPosition = zoomPositionBinding.wrappedValue
 		}
 		
 		rotation.x = clamp(rotation.x + velocityPan.x, minYaw.degrees, maxYaw.degrees)
@@ -197,8 +198,8 @@ public struct OrbitControls<C: Camera>: CameraControls {
 		if let rotationBinding = rotationBinding {
 			rotationBinding.wrappedValue = rotation
 		}
-		if let distanceBinding = distanceBinding {
-			distanceBinding.wrappedValue = distance
+		if let zoomPositionBinding = zoomPositionBinding {
+			zoomPositionBinding.wrappedValue = zoomPosition
 		}
 		
 		let theta = rotation.x * (.pi / 180)
