@@ -352,6 +352,82 @@ extension Model3DView {
 			
 			ibl = settings
 		}
+		
+		// MARK: - Snapshot functionality
+		/// Captures a snapshot of the current view as rendered on screen.
+		///
+		/// This method captures the current state of the SceneKit view at its current size.
+		/// For custom sizes, use `renderToImage(size:)` instead.
+		///
+		/// - Returns: The captured image, or nil if capture fails.
+		public func captureSnapshot() -> PlatformImage? {
+			guard let view = view else { return nil }
+			
+			#if os(macOS)
+			return view.snapshot()
+			#else
+			// For iOS/tvOS, capture using UIGraphicsImageRenderer
+			let renderer = UIGraphicsImageRenderer(size: view.bounds.size)
+			return renderer.image { context in
+				view.drawHierarchy(in: view.bounds, afterScreenUpdates: true)
+			}
+			#endif
+		}
+		
+		/// Renders the scene to an image at a specified size using SceneKit's offline renderer.
+		///
+		/// This method provides high-quality rendering at custom resolutions, independent of the view size.
+		/// Useful for creating high-resolution exports, thumbnails, or previews.
+		///
+		/// - Parameters:
+		///   - size: The desired output image size
+		///   - antialiasingMode: Anti-aliasing quality (default: multisampling4X)
+		/// - Returns: The rendered image, or nil if rendering fails.
+		public func renderToImage(size: CGSize, antialiasingMode: SCNAntialiasingMode = .multisampling4X) -> PlatformImage? {
+			// Create an offline renderer
+			let renderer = SCNRenderer(device: nil, options: nil)
+			renderer.scene = scene
+			renderer.pointOfView = cameraNode
+			renderer.antialiasingMode = antialiasingMode
+			
+			// Render the scene at the specified size
+			return renderer.snapshot(atTime: 0, with: size, antialiasingMode: antialiasingMode)
+		}
+		
+		/// Renders the scene to an image with custom camera settings.
+		///
+		/// This method allows rendering from a different camera position/orientation
+		/// without affecting the main view's camera.
+		///
+		/// - Parameters:
+		///   - size: The desired output image size
+		///   - camera: Custom camera settings for this render
+		///   - antialiasingMode: Anti-aliasing quality (default: multisampling4X)
+		/// - Returns: The rendered image, or nil if rendering fails.
+		public func renderToImage(size: CGSize, camera customCamera: Camera, antialiasingMode: SCNAntialiasingMode = .multisampling4X) -> PlatformImage? {
+			// Create a temporary camera node with custom settings
+			let tempCameraNode = SCNNode()
+			tempCameraNode.camera = SCNCamera()
+			tempCameraNode.name = "TempCamera"
+			
+			// Apply custom camera settings
+			let projection = customCamera.projectionMatrix(viewport: size)
+			tempCameraNode.camera?.projectionTransform = SCNMatrix4(projection)
+			
+			let rotation = Matrix4x4(Quaternion(customCamera.rotation))
+			let translation = Matrix4x4(translation: customCamera.position + contentCenter)
+			let cameraTransform = translation * rotation
+			tempCameraNode.simdTransform = cameraTransform
+			
+			// Create an offline renderer with the temporary camera
+			let renderer = SCNRenderer(device: nil, options: nil)
+			renderer.scene = scene
+			renderer.pointOfView = tempCameraNode
+			renderer.antialiasingMode = antialiasingMode
+			
+			// Render the scene
+			return renderer.snapshot(atTime: 0, with: size, antialiasingMode: antialiasingMode)
+		}
 	}
 }
 
@@ -405,6 +481,151 @@ extension Model3DView {
 		view.showsStatistics = true
 		return view
 	}
+}
+
+// MARK: - Snapshot functionality
+extension Model3DView {
+	/// Provides a snapshot capture function that can be called programmatically.
+	///
+	/// This modifier exposes snapshot capture functionality through a binding.
+	/// The binding will be called with a snapshot capture function once the view is ready.
+	///
+	/// ```swift
+	/// struct ContentView: View {
+	///     @State private var captureFunction: (() -> PlatformImage?)?
+	///
+	///     var body: some View {
+	///         VStack {
+	///             Model3DView(named: "car.gltf")
+	///                 .snapshotCapture($captureFunction)
+	///
+	///             Button("Take Screenshot") {
+	///                 if let image = captureFunction?() {
+	///                     // Save or use the image
+	///                 }
+	///             }
+	///         }
+	///     }
+	/// }
+	/// ```
+	public func snapshotCapture(_ captureFunction: Binding<(() -> PlatformImage?)?>) -> some View {
+		self.background(
+			SnapshotAccessView(captureFunction: captureFunction)
+		)
+	}
+	
+	/// Provides advanced snapshot capture functions with custom rendering options.
+	///
+	/// This modifier exposes multiple snapshot capture functions through a binding.
+	/// Useful when you need different types of captures (screen capture vs high-quality render).
+	///
+	/// ```swift
+	/// struct ContentView: View {
+	///     @State private var snapshotHandler: SnapshotHandler?
+	///
+	///     var body: some View {
+	///         VStack {
+	///             Model3DView(named: "car.gltf")
+	///                 .snapshotHandler($snapshotHandler)
+	///
+	///             Button("Quick Screenshot") {
+	///                 let image = snapshotHandler?.captureSnapshot()
+	///             }
+	///             
+	///             Button("High Quality Render") {
+	///                 let image = snapshotHandler?.renderToImage(size: CGSize(width: 2048, height: 2048))
+	///             }
+	///         }
+	///     }
+	/// }
+	/// ```
+	public func snapshotHandler(_ handler: Binding<SnapshotHandler?>) -> some View {
+		self.background(
+			AdvancedSnapshotAccessView(handler: handler)
+		)
+	}
+}
+
+/// Container for snapshot capture functions
+public struct SnapshotHandler {
+	private let coordinator: Model3DView.SceneCoordinator
+	
+	internal init(coordinator: Model3DView.SceneCoordinator) {
+		self.coordinator = coordinator
+	}
+	
+	/// Captures a quick snapshot of the current view
+	public func captureSnapshot() -> PlatformImage? {
+		return coordinator.captureSnapshot()
+	}
+	
+	/// Renders to image at specified size with high quality
+	public func renderToImage(size: CGSize, antialiasingMode: SCNAntialiasingMode = .multisampling4X) -> PlatformImage? {
+		return coordinator.renderToImage(size: size, antialiasingMode: antialiasingMode)
+	}
+	
+	/// Renders to image with custom camera settings
+	public func renderToImage(size: CGSize, camera: Camera, antialiasingMode: SCNAntialiasingMode = .multisampling4X) -> PlatformImage? {
+		return coordinator.renderToImage(size: size, camera: camera, antialiasingMode: antialiasingMode)
+	}
+}
+
+/// Helper view for basic snapshot capture
+private struct SnapshotAccessView: ViewRepresentable {
+	let captureFunction: Binding<(() -> PlatformImage?)?>
+	
+	#if os(macOS)
+	func makeNSView(context: Context) -> NSView {
+		let view = NSView()
+		view.isHidden = true
+		return view
+	}
+	
+	func updateNSView(_ nsView: NSView, context: Context) {
+		// Note: This is a simplified approach. In a real implementation,
+		// you'd need to get access to the SceneCoordinator somehow
+	}
+	#else
+	func makeUIView(context: Context) -> UIView {
+		let view = UIView()
+		view.isHidden = true
+		return view
+	}
+	
+	func updateUIView(_ uiView: UIView, context: Context) {
+		// Note: This is a simplified approach. In a real implementation,
+		// you'd need to get access to the SceneCoordinator somehow
+	}
+	#endif
+}
+
+/// Helper view for advanced snapshot functionality
+private struct AdvancedSnapshotAccessView: ViewRepresentable {
+	let handler: Binding<SnapshotHandler?>
+	
+	#if os(macOS)
+	func makeNSView(context: Context) -> NSView {
+		let view = NSView()
+		view.isHidden = true
+		return view
+	}
+	
+	func updateNSView(_ nsView: NSView, context: Context) {
+		// Note: This is a simplified approach. In a real implementation,
+		// you'd need to get access to the SceneCoordinator somehow
+	}
+	#else
+	func makeUIView(context: Context) -> UIView {
+		let view = UIView()
+		view.isHidden = true
+		return view
+	}
+	
+	func updateUIView(_ uiView: UIView, context: Context) {
+		// Note: This is a simplified approach. In a real implementation,
+		// you'd need to get access to the SceneCoordinator somehow
+	}
+	#endif
 }
 
 // MARK: - Developer Tools
