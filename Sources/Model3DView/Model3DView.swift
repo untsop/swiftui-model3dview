@@ -388,7 +388,6 @@ extension Model3DView {
 			let renderer = SCNRenderer(device: nil, options: nil)
 			renderer.scene = scene
 			renderer.pointOfView = cameraNode
-			renderer.antialiasingMode = antialiasingMode
 			
 			// Render the scene at the specified size
 			return renderer.snapshot(atTime: 0, with: size, antialiasingMode: antialiasingMode)
@@ -423,7 +422,6 @@ extension Model3DView {
 			let renderer = SCNRenderer(device: nil, options: nil)
 			renderer.scene = scene
 			renderer.pointOfView = tempCameraNode
-			renderer.antialiasingMode = antialiasingMode
 			
 			// Render the scene
 			return renderer.snapshot(atTime: 0, with: size, antialiasingMode: antialiasingMode)
