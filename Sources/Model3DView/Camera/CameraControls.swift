@@ -219,10 +219,18 @@ public struct OrbitControls<C: Camera>: CameraControls {
 	}
 
 	public func body(content: Content) -> some View {
-		content
-			.gesture(pinchGestureEnabled ? AnyGesture(dragGesture.exclusively(before: pinchGesture)) : AnyGesture(dragGesture))
-			.onAppear { tick() }
-			.camera(camera.wrappedValue)
-			.onFrame(isActive: isAnimating, tick)
+		if pinchGestureEnabled {
+			content
+				.gesture(dragGesture.exclusively(before: pinchGesture))
+				.onAppear { tick() }
+				.camera(camera.wrappedValue)
+				.onFrame(isActive: isAnimating, tick)
+		} else {
+			content
+				.gesture(dragGesture)
+				.onAppear { tick() }
+				.camera(camera.wrappedValue)
+				.onFrame(isActive: isAnimating, tick)
+		}
 	}
 }
