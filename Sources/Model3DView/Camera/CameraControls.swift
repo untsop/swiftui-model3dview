@@ -54,7 +54,7 @@ public struct OrbitControls<C: Camera>: CameraControls {
 	
 	// Optional bindings for external state control
 	private var rotationBinding: Binding<CGPoint>?
-	private var zoomPositionBinding: Binding<CGFloat>?
+	private var zoomBinding: Binding<CGFloat>?
 	
 	// Values to apply to the camera.
 	@State private var rotation = CGPoint()
@@ -113,7 +113,7 @@ public struct OrbitControls<C: Camera>: CameraControls {
 	public init(
 		camera: Binding<BoundCamera>,
 		rotation: Binding<CGPoint>,
-		zoomPosition: Binding<CGFloat>,
+		zoom: Binding<CGFloat>,
 		sensitivity: CGFloat = 0.5,
 		minPitch: Angle = .degrees(-89.9),
 		maxPitch: Angle = .degrees(89.9),
@@ -135,12 +135,7 @@ public struct OrbitControls<C: Camera>: CameraControls {
 		self.friction = clamp(friction, 0.01, 0.99)
 		self.pinchGestureEnabled = pinchGestureEnabled
 		self.rotationBinding = rotation
-		self.zoomPositionBinding = zoomPosition
-		
-		// Initialize internal state with bound values
-		_rotation = State(initialValue: rotation.wrappedValue)
-		_zoomPosition = State(initialValue: zoomPosition.wrappedValue)
-		_distance = State(initialValue: CGFloat(length(camera.wrappedValue.position)))
+		self.zoomBinding = zoom
 	}
 
 	// MARK: -
@@ -186,20 +181,20 @@ public struct OrbitControls<C: Camera>: CameraControls {
 		if let rotationBinding = rotationBinding {
 			rotation = rotationBinding.wrappedValue
 		}
-		if let zoomPositionBinding = zoomPositionBinding {
-			zoomPosition = zoomPositionBinding.wrappedValue
-		}
 		
 		rotation.x = clamp(rotation.x + velocityPan.x, minYaw.degrees, maxYaw.degrees)
 		rotation.y = clamp(rotation.y + velocityPan.y, minPitch.degrees, maxPitch.degrees)
-		distance = clamp(distance + velocityZoom, minZoom, maxZoom)
+
+		if let zoomBinding = zoomBinding {
+			distance = clamp(zoomBinding.wrappedValue, minZoom, maxZoom)
+		}
+		else {
+			distance = clamp(distance + velocityZoom, minZoom, maxZoom)
+		}
 		
 		// Sync back to external bindings if available
 		if let rotationBinding = rotationBinding {
 			rotationBinding.wrappedValue = rotation
-		}
-		if let zoomPositionBinding = zoomPositionBinding {
-			zoomPositionBinding.wrappedValue = zoomPosition
 		}
 		
 		let theta = rotation.x * (.pi / 180)
