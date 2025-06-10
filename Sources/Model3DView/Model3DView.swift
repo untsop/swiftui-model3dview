@@ -116,6 +116,11 @@ public struct Model3DView: ViewRepresentable {
 			rotate: context.environment.transform3D.rotation,
 			scale: context.environment.transform3D.scale,
 			translate: context.environment.transform3D.translation)
+		
+		// Update snapshot handler if available
+		if let snapshotBinding = context.environment.snapshotHandlerBinding {
+			coordinator.setSnapshotHandlerBinding(snapshotBinding)
+		}
 	}
 }
 
@@ -175,6 +180,9 @@ extension Model3DView {
 		private var loadedScene: SCNScene? // Keep a reference for `AsyncResourcesCache`.
 
 		fileprivate var onLoadHandlers: [(ModelLoadState) -> Void] = []
+		
+		// Snapshot handler binding support
+		private var snapshotHandlerBinding: Binding<SnapshotHandler?>?
 
 		// Properties for diffing.
 		private var sceneFile: SceneFileType?
@@ -212,6 +220,26 @@ extension Model3DView {
 			view.delegate = self
 			view.pointOfView = cameraNode
 			view.scene = scene
+			
+			// Update snapshot handler binding if available
+			updateSnapshotHandler()
+		}
+		
+		/// Set the snapshot handler binding
+		fileprivate func setSnapshotHandlerBinding(_ binding: Binding<SnapshotHandler?>?) {
+			snapshotHandlerBinding = binding
+			updateSnapshotHandler()
+		}
+		
+		/// Update the snapshot handler binding with a new handler instance
+		private func updateSnapshotHandler() {
+			guard let binding = snapshotHandlerBinding, view != nil else { return }
+			
+			// Create and set the handler
+			let handler = SnapshotHandler(coordinator: self)
+			DispatchQueue.main.async {
+				binding.wrappedValue = handler
+			}
 		}
 
 		fileprivate func setSceneFile(_ sceneFile: SceneFileType) {
@@ -483,34 +511,7 @@ extension Model3DView {
 
 // MARK: - Snapshot functionality
 extension Model3DView {
-	/// Provides a snapshot capture function that can be called programmatically.
-	///
-	/// This modifier exposes snapshot capture functionality through a binding.
-	/// The binding will be called with a snapshot capture function once the view is ready.
-	///
-	/// ```swift
-	/// struct ContentView: View {
-	///     @State private var captureFunction: (() -> PlatformImage?)?
-	///
-	///     var body: some View {
-	///         VStack {
-	///             Model3DView(named: "car.gltf")
-	///                 .snapshotCapture($captureFunction)
-	///
-	///             Button("Take Screenshot") {
-	///                 if let image = captureFunction?() {
-	///                     // Save or use the image
-	///                 }
-	///             }
-	///         }
-	///     }
-	/// }
-	/// ```
-	public func snapshotCapture(_ captureFunction: Binding<(() -> PlatformImage?)?>) -> some View {
-		self.background(
-			SnapshotAccessView(captureFunction: captureFunction)
-		)
-	}
+
 	
 	/// Provides advanced snapshot capture functions with custom rendering options.
 	///
@@ -538,9 +539,7 @@ extension Model3DView {
 	/// }
 	/// ```
 	public func snapshotHandler(_ handler: Binding<SnapshotHandler?>) -> some View {
-		self.background(
-			AdvancedSnapshotAccessView(handler: handler)
-		)
+		self.modifier(SnapshotHandlerModifier(handler: handler))
 	}
 }
 
@@ -568,63 +567,7 @@ public struct SnapshotHandler {
 	}
 }
 
-/// Helper view for basic snapshot capture
-private struct SnapshotAccessView: ViewRepresentable {
-	let captureFunction: Binding<(() -> PlatformImage?)?>
-	
-	#if os(macOS)
-	func makeNSView(context: Context) -> NSView {
-		let view = NSView()
-		view.isHidden = true
-		return view
-	}
-	
-	func updateNSView(_ nsView: NSView, context: Context) {
-		// Note: This is a simplified approach. In a real implementation,
-		// you'd need to get access to the SceneCoordinator somehow
-	}
-	#else
-	func makeUIView(context: Context) -> UIView {
-		let view = UIView()
-		view.isHidden = true
-		return view
-	}
-	
-	func updateUIView(_ uiView: UIView, context: Context) {
-		// Note: This is a simplified approach. In a real implementation,
-		// you'd need to get access to the SceneCoordinator somehow
-	}
-	#endif
-}
 
-/// Helper view for advanced snapshot functionality
-private struct AdvancedSnapshotAccessView: ViewRepresentable {
-	let handler: Binding<SnapshotHandler?>
-	
-	#if os(macOS)
-	func makeNSView(context: Context) -> NSView {
-		let view = NSView()
-		view.isHidden = true
-		return view
-	}
-	
-	func updateNSView(_ nsView: NSView, context: Context) {
-		// Note: This is a simplified approach. In a real implementation,
-		// you'd need to get access to the SceneCoordinator somehow
-	}
-	#else
-	func makeUIView(context: Context) -> UIView {
-		let view = UIView()
-		view.isHidden = true
-		return view
-	}
-	
-	func updateUIView(_ uiView: UIView, context: Context) {
-		// Note: This is a simplified approach. In a real implementation,
-		// you'd need to get access to the SceneCoordinator somehow
-	}
-	#endif
-}
 
 // MARK: - Developer Tools
 struct Model3DView_Library: LibraryContentProvider {

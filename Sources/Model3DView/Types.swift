@@ -9,9 +9,11 @@ import SwiftUI
 
 #if os(macOS)
 public typealias PlatformImage = NSImage
+public typealias PlatformColor = NSColor
 typealias ViewRepresentable = NSViewRepresentable
 #elseif os(iOS) || os(tvOS)
 public typealias PlatformImage = UIImage
+public typealias PlatformColor = UIColor
 typealias ViewRepresentable = UIViewRepresentable
 #endif
 

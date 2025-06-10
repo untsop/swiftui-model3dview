@@ -22,6 +22,10 @@ struct Transform3DEnvironmentKey: EnvironmentKey {
 	static var defaultValue = Transform3DProperties()
 }
 
+struct SnapshotHandlerBindingKey: EnvironmentKey {
+	static var defaultValue: Binding<SnapshotHandler?>? = nil
+}
+
 // MARK: - Environment values.
 extension EnvironmentValues {
 	var camera: Camera {
@@ -42,5 +46,10 @@ extension EnvironmentValues {
 	var transform3D: Transform3DProperties {
 		get { self[Transform3DEnvironmentKey.self] }
 		set { self[Transform3DEnvironmentKey.self] = newValue }
+	}
+	
+	var snapshotHandlerBinding: Binding<SnapshotHandler?>? {
+		get { self[SnapshotHandlerBindingKey.self] }
+		set { self[SnapshotHandlerBindingKey.self] = newValue }
 	}
 }
